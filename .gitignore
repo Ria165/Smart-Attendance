@@ -1,0 +1,15 @@
+﻿.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+key.pem
+*.key
+smart_attendance.db
+*.db
+
+cert.pem
+
+exports/

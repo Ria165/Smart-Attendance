@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Suspicious Attempt Alerts - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Suspicious Attempt Alerts</h3>
+        <p class="text-muted small mb-0">System-flagged verification anomalies requiring faculty investigation</p>
+    </div>
+</div>
+
+<div class="alert alert-info py-2 small mb-4">
+    <i class="bi bi-info-circle me-1"></i>
+    <b>Notice on Anomaly Evaluation:</b> Technical issues such as low GPS accuracy indoors or poor camera lighting generate review events. Flagged events indicate anomalies to investigate, not automatic conclusive evidence of academic dishonesty.
+</div>
+
+<!-- Tabs: Unreviewed vs All/Reviewed -->
+<ul class="nav nav-pills mb-4">
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_mode == 'unreviewed' }}" href="{{ url_for('staff.alerts', filter='unreviewed') }}">
+            <i class="bi bi-bell-fill me-1"></i> Unreviewed Alerts
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_mode == 'reviewed' }}" href="{{ url_for('staff.alerts', filter='reviewed') }}">
+            <i class="bi bi-check2-circle me-1"></i> Reviewed History
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ 'active' if filter_mode == 'all' }}" href="{{ url_for('staff.alerts', filter='all') }}">
+            All Events
+        </a>
+    </li>
+</ul>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Event ID</th>
+                        <th>Category</th>
+                        <th>Student Details</th>
+                        <th>Details / Diagnostics</th>
+                        <th>Client IP</th>
+                        <th>Timestamp</th>
+                        <th class="text-end">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ev in events %}
+                    <tr>
+                        <td class="font-monospace text-muted small">#{{ ev.id }}</td>
+                        <td>
+                            <span class="badge {{ 'bg-danger' if 'MISMATCH' in ev.failure_category or 'OUT_OF_BOUNDS' in ev.failure_category else 'bg-warning text-dark' }} text-uppercase">
+                                {{ ev.failure_category }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if ev.student %}
+                                <strong class="text-navy">{{ ev.student.user.full_name }}</strong>
+                                <div class="font-monospace small text-muted">{{ ev.student.student_id }}</div>
+                            {% else %}
+                                <span class="text-muted italic">Unidentified / Pre-auth Attempt</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-secondary" style="max-width: 320px;">
+                            {{ ev.details or 'No additional diagnostics' }}
+                        </td>
+                        <td class="small font-monospace text-muted">{{ ev.client_ip or '-' }}</td>
+                        <td class="small text-muted">{{ ev.recorded_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                        <td class="text-end">
+                            {% if not ev.is_reviewed %}
+                                <form method="POST" action="{{ url_for('staff.review_alert', event_id=ev.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-check-lg me-1"></i> Mark Reviewed
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                    <i class="bi bi-check2 me-1"></i> Reviewed
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-shield-check text-success fs-2 d-block mb-2"></i>
+                            No verification alerts found in this view.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

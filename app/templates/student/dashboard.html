@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Student Profile Card -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body text-center p-4">
+                <div class="avatar-circle mx-auto mb-3" style="width: 72px; height: 72px; font-size: 2rem;">
+                    {{ user.full_name[0] }}
+                </div>
+                <h4 class="fw-bold text-navy mb-1">{{ user.full_name }}</h4>
+                <div class="badge bg-light text-muted border font-monospace mb-2">{{ student.student_id }}</div>
+                <div class="text-muted small mb-3">
+                    <i class="bi bi-mortarboard me-1"></i> Class: <strong>{{ student_class.name if student_class else 'Unassigned' }}</strong><br>
+                    <i class="bi bi-envelope me-1"></i> {{ user.email }}
+                </div>
+
+                <!-- Face Enrollment Status Pill -->
+                <div class="p-3 rounded border mb-3 {{ 'bg-success-subtle border-success-subtle' if student.face_enrolled else 'bg-warning-subtle border-warning-subtle' }}">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="text-start">
+                            <div class="small fw-bold {{ 'text-success' if student.face_enrolled else 'text-warning-emphasis' }}">
+                                <i class="bi {{ 'bi-check-circle-fill' if student.face_enrolled else 'bi-exclamation-circle-fill' }} me-1"></i>
+                                Face Profile: {{ 'Enrolled' if student.face_enrolled else 'Not Enrolled' }}
+                            </div>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                {{ 'Ready for biometric verification' if student.face_enrolled else 'Action required before scanning' }}
+                            </small>
+                        </div>
+                        <a href="{{ url_for('student.face_enroll_page') }}" class="btn btn-sm {{ 'btn-outline-success' if student.face_enrolled else 'btn-warning fw-bold' }}">
+                            {{ 'Update' if student.face_enrolled else 'Enroll Face' }}
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Quick Action: Scan Attendance QR -->
+                <div class="d-grid">
+                    <a href="{{ url_for('student.scan_page') }}" class="btn btn-primary bg-navy border-0 py-3 fw-bold fs-5 shadow-sm">
+                        <i class="bi bi-qr-code-scan me-2 text-warning"></i> Scan Attendance QR
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Performance Overview -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i> Current Month Attendance Breakdown
+                </h6>
+                {% if overall_percentage is not none %}
+                    <span class="badge {{ 'bg-success' if overall_percentage >= low_threshold else 'bg-danger' }} fs-6">
+                        Overall: {{ overall_percentage }}%
+                    </span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if overall_percentage is not none and overall_percentage < low_threshold %}
+                <div class="alert alert-danger py-2 small mb-3">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    <b>Low Attendance Warning:</b> Your cumulative monthly attendance is below {{ "%.0f"|format(low_threshold) }}%. Please attend upcoming scheduled lectures to maintain academic eligibility.
+                </div>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th class="text-center">Lectures Held</th>
+                                <th class="text-center">Attended</th>
+                                <th class="text-center">Percentage</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in subject_stats %}
+                            <tr>
+                                <td>
+                                    <strong class="text-navy">{{ s.subject_code }}</strong>
+                                    <div class="small text-muted">{{ s.subject_name }}</div>
+                                </td>
+                                <td class="text-center">{{ s.sessions_held }}</td>
+                                <td class="text-center fw-semibold text-success">{{ s.present_count }}</td>
+                                <td class="text-center">
+                                    <span class="fw-bold {{ 'text-danger' if s.is_low else 'text-navy' }}">
+                                        {{ s.percentage_display }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    {% if s.is_low %}
+                                        <span class="badge bg-danger">Low (<75%)</span>
+                                    {% elif s.percentage is not none %}
+                                        <span class="badge bg-success">Good</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-muted border">No Lectures</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted small">
+                                    No subjects enrolled for your class.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Personal Attendance History -->
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-clock-history me-2"></i> Recent Attendance Log</h6>
+        <a href="{{ url_for('student.history') }}" class="small text-decoration-none">Full History &rarr;</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Classroom</th>
+                        <th>Date & Time</th>
+                        <th>Verification Breakdown</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recent_records %}
+                    <tr>
+                        <td>
+                            <strong class="text-navy">{{ r.subject.subject_code }}</strong>
+                            <div class="small text-muted">{{ r.subject.subject_name }}</div>
+                        </td>
+                        <td class="small">{{ r.classroom.classroom_name }}</td>
+                        <td class="small text-muted">{{ r.marked_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                        <td>
+                            <span class="badge bg-light text-dark border me-1"><i class="bi bi-qr-code text-success me-1"></i> QR OK</span>
+                            <span class="badge bg-light text-dark border me-1"><i class="bi bi-geo-alt text-success me-1"></i> GPS OK</span>
+                            <span class="badge bg-light text-dark border"><i class="bi bi-person-check text-success me-1"></i> Face OK</span>
+                        </td>
+                        <td>
+                            <span class="badge {{ r.final_status|status_badge }}">{{ r.final_status }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted small">
+                            No attendance recorded yet. Scan an active lecture QR code to get started.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Student Registration - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-4">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-navy text-white p-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-mortarboard me-2"></i> Student Account Registration</h5>
+                <small class="text-white-50">Enroll with your official student credentials</small>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-warning py-2 small mb-4">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Student accounts are reviewed by your department faculty prior to enabling attendance sessions.
+                </div>
+
+                <form method="POST" action="{{ url_for('auth.register_student') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Full Name</label>
+                            <input type="text" class="form-control" name="full_name" placeholder="John Student" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Student ID / Roll No</label>
+                            <input type="text" class="form-control" name="student_id" placeholder="e.g. STU2026101" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">College Email Address</label>
+                            <input type="email" class="form-control" name="email" placeholder="student@college.edu" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Class & Section Assignment</label>
+                            <select class="form-select" name="class_id" required>
+                                <option value="" disabled selected>-- Select your enrolled class --</option>
+                                {% for c in classes %}
+                                    <option value="{{ c.id }}">{{ c.name }} ({{ c.department }} - Sem {{ c.semester }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Password</label>
+                            <input type="password" class="form-control" name="password" placeholder="Create a secure password" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary bg-navy border-0 py-2 fw-semibold">
+                            Submit Student Registration
+                        </button>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('auth.login') }}" class="small text-decoration-none">&larr; Back to Login</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

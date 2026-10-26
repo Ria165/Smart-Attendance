@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Personal Attendance History - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">My Attendance History</h3>
+        <p class="text-muted small mb-0">Record of verified classroom attendance sessions for {{ student.user.full_name }}</p>
+    </div>
+    <a href="{{ url_for('student.scan_page') }}" class="btn btn-primary bg-navy border-0">
+        <i class="bi bi-qr-code-scan me-1 text-warning"></i> Scan New QR
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold text-navy">
+            <i class="bi bi-clock-history me-2"></i> Attendance Record Entries ({{ records|length }})
+        </h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Classroom</th>
+                        <th>Date</th>
+                        <th>Marked Time</th>
+                        <th>Verification Breakdown</th>
+                        <th>Attendance Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>
+                            <strong class="text-navy">{{ r.subject.subject_code }}</strong>
+                            <div class="small text-muted">{{ r.subject.subject_name }}</div>
+                        </td>
+                        <td>
+                            <div>{{ r.classroom.classroom_name }}</div>
+                            <small class="text-muted">{{ r.classroom.building_name }} - {{ r.classroom.room_number }}</small>
+                        </td>
+                        <td>{{ r.attendance_date.strftime('%Y-%m-%d') }}</td>
+                        <td class="small text-muted">{{ r.marked_timestamp.strftime('%H:%M:%S UTC') }}</td>
+                        <td>
+                            <span class="badge bg-light text-dark border me-1">
+                                <i class="bi bi-qr-code {{ 'text-success' if r.qr_verification_result == 'PASSED' else 'text-danger' }}"></i> QR: {{ r.qr_verification_result }}
+                            </span>
+                            <span class="badge bg-light text-dark border me-1">
+                                <i class="bi bi-geo-alt {{ 'text-success' if r.location_verification_result == 'PASSED' else 'text-danger' }}"></i> GPS: {{ r.location_verification_result }}
+                            </span>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-person-check {{ 'text-success' if r.face_verification_result == 'PASSED' else 'text-danger' }}"></i> Face: {{ r.face_verification_result }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge {{ r.final_status|status_badge }}">{{ r.final_status }}</span>
+                            {% if r.corrections.count() > 0 %}
+                                <span class="badge bg-warning text-dark border" title="Corrected by faculty">Adjusted</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-journal-x fs-2 d-block mb-2"></i>
+                            No attendance records found. Participate in an active attendance session to record your attendance.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

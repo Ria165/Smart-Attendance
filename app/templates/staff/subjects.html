@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Subjects & Classes - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Subjects & Academic Classes</h3>
+        <p class="text-muted small mb-0">Manage teaching assignments and academic class rosters</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Assigned Subjects List -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-journal-bookmark-fill text-primary me-2"></i> Your Assigned Subjects</h6>
+                <span class="badge bg-light text-navy border">{{ subjects|length }} Subjects</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Subject Name</th>
+                                <th>Assigned Class</th>
+                                <th>Enrolled</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in subjects %}
+                            <tr>
+                                <td><span class="badge bg-navy">{{ s.subject_code }}</span></td>
+                                <td><strong class="text-dark">{{ s.subject_name }}</strong></td>
+                                <td><span class="badge bg-light text-dark border">{{ s.assigned_class.name }}</span></td>
+                                <td>
+                                    <span class="text-muted small">
+                                        <i class="bi bi-people me-1"></i> {{ s.assigned_class.enrollments.count() }} students
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted small">
+                                    No subjects assigned yet. Create one using the form on the right.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assigned Class Student Rosters -->
+        <div class="card shadow-sm border-0 mb-4" id="rosters">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-people-fill text-success me-2"></i> Assigned Class Student Rosters
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                {% for s in subjects %}
+                <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong class="text-navy">{{ s.subject_code }} &mdash; {{ s.subject_name }}</strong>
+                        <span class="badge bg-light text-dark border ms-2">{{ s.assigned_class.name }}</span>
+                    </div>
+                    <span class="badge bg-navy">{{ s.assigned_class.enrollments.count() }} Enrolled</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead>
+                            <tr class="table-light">
+                                <th class="ps-3">Student Name</th>
+                                <th>Student ID</th>
+                                <th>College Email</th>
+                                <th class="text-end pe-3">Face Enrolled</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in s.assigned_class.enrollments %}
+                            <tr>
+                                <td class="ps-3">
+                                    <strong class="text-navy">{{ e.student.user.full_name }}</strong>
+                                </td>
+                                <td><code>{{ e.student.student_id }}</code></td>
+                                <td class="small text-muted">{{ e.student.user.email }}</td>
+                                <td class="text-end pe-3">
+                                    {% if e.student.face_enrolled %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Enrolled</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3 text-muted small">
+                                    No students enrolled in this class yet.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted small">
+                    No subjects assigned yet.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Add Subject / Add Class Forms -->
+    <div class="col-lg-5">
+        <!-- Add Subject Card -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-plus-circle text-success me-2"></i> Add Teaching Subject</h6>
+            </div>
+            <div class="card-body p-3">
+                <form method="POST" action="{{ url_for('staff.subjects') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="create_subject">
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Subject Code</label>
+                        <input type="text" class="form-control" name="subject_code" placeholder="e.g. CS501" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Subject Name</label>
+                        <input type="text" class="form-control" name="subject_name" placeholder="e.g. Advanced Operating Systems" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Assign to Class</label>
+                        <select class="form-select" name="class_id" required>
+                            <option value="" disabled selected>-- Select Academic Class --</option>
+                            {% for c in classes %}
+                                <option value="{{ c.id }}">{{ c.name }} ({{ c.department }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary bg-navy border-0 py-2 fw-semibold">
+                            Create Subject
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Class Card -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-grid-3x3 text-info me-2"></i> Register New Academic Class</h6>
+            </div>
+            <div class="card-body p-3">
+                <form method="POST" action="{{ url_for('staff.subjects') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="create_class">
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">Department</label>
+                            <input type="text" class="form-control" name="department" placeholder="e.g. CSE" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">Section</label>
+                            <input type="text" class="form-control" name="section" placeholder="e.g. A" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">Year (1-4)</label>
+                            <input type="number" class="form-control" name="year" min="1" max="5" value="3" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-muted">Semester (1-8)</label>
+                            <input type="number" class="form-control" name="semester" min="1" max="10" value="5" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-outline-secondary py-2 fw-semibold">
+                            Register Class
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

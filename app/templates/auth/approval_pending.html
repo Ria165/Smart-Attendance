@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Account Awaiting Approval - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-5">
+    <div class="col-md-7 col-lg-5 text-center">
+        <div class="card shadow-sm border-0 p-4">
+            <div class="card-body">
+                <div class="mb-3 text-warning">
+                    <i class="bi bi-hourglass-split display-3"></i>
+                </div>
+                <h4 class="fw-bold text-navy mb-2">Your account is awaiting approval.</h4>
+                <p class="text-muted small">
+                    Your registration credentials have been verified. To prevent proxy attendance and protect academic records, accounts must be approved before granting access.
+                </p>
+                
+                <div class="bg-light p-3 rounded text-start mb-4 border">
+                    <h6 class="fw-bold small text-muted mb-2 text-uppercase">Authorization Instructions:</h6>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li class="mb-2">
+                            <b>Faculty / Staff Members:</b> Initial staff accounts are securely authorized using the setup command in the terminal:<br>
+                            <code>flask approve-staff &lt;email&gt;</code> or <code>py scripts/approve_staff.py --approve &lt;email&gt;</code>
+                        </li>
+                        <li>
+                            <b>Students:</b> Once your faculty member logs in, they will review and approve your account on the <b>Student Account Approvals</b> page in the Faculty Dashboard.
+                        </li>
+                    </ul>
+                </div>
+
+                <a href="{{ url_for('auth.login') }}" class="btn btn-outline-primary w-100">
+                    &larr; Return to Login Page
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

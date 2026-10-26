@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Biometric Face Enrollment - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-2">
+    <div class="col-md-9 col-lg-7 text-center">
+        <h3 class="fw-bold text-navy mb-1">Student Face Profile Enrollment</h3>
+        <p class="text-muted small mb-3">
+            Register your facial biometric template using your device camera for anti-proxy verification
+        </p>
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <!-- Privacy & Consent Notice -->
+                <div class="alert alert-secondary text-start small mb-3 py-2">
+                    <i class="bi bi-shield-lock-fill text-primary me-1"></i>
+                    <b>Biometric Privacy & Consent:</b> By enrolling, your camera frame is converted into a 128-dimensional normalized facial feature vector stored securely in encrypted form. Raw photographs are not permanently retained on the server.
+                </div>
+
+                <!-- Video Viewfinder Frame -->
+                <div class="camera-viewfinder-wrapper mb-3" style="min-height: 320px;">
+                    <video id="webcam-video" autoplay playsinline muted style="width: 100%; height: auto; display: block;"></video>
+                    <div class="camera-guide-circle"></div>
+                    <canvas id="snapshot-canvas" style="display: none;"></canvas>
+                </div>
+
+                <!-- Status Feedback -->
+                <div id="enroll-feedback" class="alert d-none py-2 small mb-3"></div>
+
+                <!-- Controls -->
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-start-camera" onclick="startCamera();">
+                        <i class="bi bi-camera-video me-1"></i> Start Camera
+                    </button>
+                    <button type="button" class="btn btn-primary bg-navy border-0 fw-semibold px-4" id="btn-capture-enroll" onclick="captureAndEnroll();" disabled>
+                        <i class="bi bi-person-bounding-box me-1"></i> Capture & Save Template
+                    </button>
+                </div>
+
+                <div class="small text-muted mt-3">
+                    <i class="bi bi-lightbulb me-1"></i> Ensure direct lighting, remove sunglasses or face coverings, and look directly into the camera.
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <a href="{{ url_for('student.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                &larr; Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let stream = null;
+    const video = document.getElementById("webcam-video");
+    const canvas = document.getElementById("snapshot-canvas");
+    const btnCapture = document.getElementById("btn-capture-enroll");
+    const btnStart = document.getElementById("btn-start-camera");
+    const feedback = document.getElementById("enroll-feedback");
+
+    // Check secure context immediately
+    function checkSecureContext() {
+        if (!window.isSecureContext) {
+            feedback.className = "alert alert-warning text-start small mb-3";
+            const httpsUrl = window.location.href.replace("http://", "https://");
+            feedback.innerHTML = `
+                <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation text-danger me-1"></i> Insecure Origin (HTTP) Detected</div>
+                <div>Android Chrome strictly disables the camera API on insecure HTTP network addresses.</div>
+                <div class="mt-2">
+                    <a href="${httpsUrl}" class="btn btn-sm btn-primary fw-semibold">
+                        <i class="bi bi-shield-lock me-1"></i> Open via HTTPS
+                    </a>
+                </div>
+                <div class="text-muted mt-2" style="font-size: 0.8rem;">
+                    When Chrome displays <em>"Your connection is not private"</em>, tap <strong>Advanced &rarr; Proceed to ... (unsafe)</strong>.
+                </div>
+            `;
+            feedback.classList.remove("d-none");
+            btnStart.disabled = true;
+            return false;
+        }
+        return true;
+    }
+
+    async function getMediaStreamWithFallback() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("navigator.mediaDevices.getUserMedia is unavailable. Secure Context (HTTPS) is required.");
+        }
+
+        const candidateConstraints = [
+            { video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+            { video: { facingMode: "user" }, audio: false },
+            { video: { facingMode: { ideal: "user" } }, audio: false },
+            { video: true, audio: false }
+        ];
+
+        let lastError = null;
+        for (const constraints of candidateConstraints) {
+            try {
+                return await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                lastError = err;
+                console.warn("Constraint attempt failed, trying fallback...", constraints, err);
+            }
+        }
+        throw lastError;
+    }
+
+    async function startCamera() {
+        if (!checkSecureContext()) return;
+
+        btnStart.disabled = true;
+        btnStart.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Starting...';
+        feedback.classList.add("d-none");
+
+        try {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+            }
+
+            stream = await getMediaStreamWithFallback();
+
+            // Setup video element for Android Chrome
+            video.srcObject = stream;
+            video.setAttribute("playsinline", "true");
+            video.setAttribute("webkit-playsinline", "true");
+            video.setAttribute("autoplay", "true");
+            video.muted = true;
+
+            // Wait for video stream metadata to be available
+            await new Promise((resolve) => {
+                if (video.readyState >= 1) {
+                    resolve();
+                } else {
+                    video.onloadedmetadata = () => resolve();
+                    // Fallback timeout in case event already fired
+                    setTimeout(resolve, 800);
+                }
+            });
+
+            // Explicit play call required by mobile Chrome
+            try {
+                await video.play();
+            } catch (playErr) {
+                console.warn("video.play() warning:", playErr);
+            }
+
+            btnCapture.disabled = false;
+            btnStart.disabled = true;
+            btnStart.innerHTML = '<i class="bi bi-camera-video-fill text-success me-1"></i> Camera Active';
+            feedback.className = "alert alert-info py-2 small mb-3";
+            feedback.innerHTML = '<i class="bi bi-check2 me-1"></i> Camera active. Center your face in the oval guide and press <b>Capture & Save Template</b>.';
+            feedback.classList.remove("d-none");
+
+        } catch (err) {
+            console.error("Camera startup failed:", err);
+            btnStart.disabled = false;
+            btnStart.innerHTML = '<i class="bi bi-camera-video me-1"></i> Start Camera';
+            btnCapture.disabled = true;
+
+            let userMsg = err.message;
+            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                userMsg = "Camera permission was denied. Tap the tune/lock icon in your Android Chrome address bar, open 'Site settings', and set Camera to 'Allow'.";
+            } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                userMsg = "No front-facing camera found on this device.";
+            } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+                userMsg = "Camera is currently in use by another app or tab. Please close other camera apps and retry.";
+            } else if (!window.isSecureContext) {
+                userMsg = "Camera access requires HTTPS. Please access via https://...";
+            }
+
+            feedback.className = "alert alert-danger py-2 small mb-3";
+            feedback.innerHTML = `<strong>Camera Error:</strong> ${userMsg}`;
+            feedback.classList.remove("d-none");
+        }
+    }
+
+    async function captureAndEnroll() {
+        if (!video.videoWidth || !video.videoHeight) {
+            feedback.className = "alert alert-warning py-2 small mb-3";
+            feedback.innerHTML = 'Camera stream is still warming up. Please wait 1 second and tap <strong>Capture & Save Template</strong> again.';
+            feedback.classList.remove("d-none");
+            return;
+        }
+
+        btnCapture.disabled = true;
+        btnCapture.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing Features...';
+
+        // Draw current video frame to canvas
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const dataUri = canvas.toDataURL("image/jpeg", 0.9);
+
+        try {
+            const resp = await fetch("{{ url_for('student.enroll_face_api') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({ face_image: dataUri })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok) {
+                feedback.className = "alert alert-success py-2 small mb-3";
+                feedback.innerHTML = `<strong>Success!</strong> ${data.message}`;
+                feedback.classList.remove("d-none");
+                // Stop camera stream
+                if (stream) stream.getTracks().forEach(t => t.stop());
+                setTimeout(() => {
+                    window.location.href = "{{ url_for('student.dashboard') }}";
+                }, 2000);
+            } else {
+                feedback.className = "alert alert-danger py-2 small mb-3";
+                feedback.innerHTML = `<strong>Enrollment Failed:</strong> ${data.message}`;
+                feedback.classList.remove("d-none");
+                btnCapture.disabled = false;
+                btnCapture.innerHTML = '<i class="bi bi-person-bounding-box me-1"></i> Retry Capture';
+            }
+        } catch (err) {
+            feedback.className = "alert alert-danger py-2 small mb-3";
+            feedback.innerHTML = `Network error: ${err.message}`;
+            feedback.classList.remove("d-none");
+            btnCapture.disabled = false;
+            btnCapture.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Try Again';
+        }
+    }
+
+    // Auto-prompt camera on page load if supported
+    window.addEventListener("DOMContentLoaded", () => {
+        if (checkSecureContext()) {
+            startCamera();
+        }
+    });
+</script>
+{% endblock %}

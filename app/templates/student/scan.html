@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Attendance QR - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-2">
+    <div class="col-md-9 col-lg-6">
+        <!-- Verification Progress Stepper -->
+        <div class="card shadow-sm border-0 mb-3 bg-white">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center text-center">
+                    <div class="step-item" id="step-pill-1">
+                        <span class="badge rounded-pill bg-primary px-3 py-2" id="badge-step-1">1. Scan QR</span>
+                    </div>
+                    <i class="bi bi-arrow-right text-muted"></i>
+                    <div class="step-item" id="step-pill-2">
+                        <span class="badge rounded-pill bg-light text-muted border px-3 py-2" id="badge-step-2">2. GPS Check</span>
+                    </div>
+                    <i class="bi bi-arrow-right text-muted"></i>
+                    <div class="step-item" id="step-pill-3">
+                        <span class="badge rounded-pill bg-light text-muted border px-3 py-2" id="badge-step-3">3. Face Verify</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Scanning & Verification Container -->
+        <div class="card shadow-sm border-0" id="main-verify-card">
+            <div class="card-header bg-navy text-white p-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold" id="card-header-title">
+                    <i class="bi bi-qr-code-scan me-2 text-warning"></i> Step 1: Scan Attendance QR Code
+                </span>
+                <span class="badge bg-light text-dark" id="status-pill">Awaiting Scan</span>
+            </div>
+
+            <div class="card-body p-4 text-center">
+                <!-- VIEW 1: QR Scanner -->
+                <div id="view-qr-scanner">
+                    <div id="reader" style="width: 100%; max-width: 440px; margin: 0 auto; border-radius: 12px; overflow: hidden;"></div>
+                    <div class="small text-muted mt-3">
+                        <i class="bi bi-camera me-1"></i> Point your smartphone camera at the projected lecture QR code.
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="restartQrScanner();">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Restart Camera
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Location & Face Verification Pipeline -->
+                <div id="view-face-location" style="display: none;">
+                    <!-- Lecture Details Banner -->
+                    <div class="alert alert-info text-start small mb-3" id="lecture-info-box">
+                        <i class="bi bi-info-circle-fill me-1"></i>
+                        <b id="info-subject">Subject</b> &bull; Class: <span id="info-class"></span><br>
+                        Room: <span id="info-classroom"></span> (Geofence radius: <span id="info-radius"></span>m)
+                    </div>
+
+                    <!-- Geolocation Status -->
+                    <div class="p-2 mb-3 rounded border text-start small" id="gps-status-box">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span><i class="bi bi-geo-alt-fill text-primary me-1"></i> GPS Coordinates:</span>
+                            <span class="badge bg-secondary" id="gps-badge">Acquiring...</span>
+                        </div>
+                        <div class="text-muted font-monospace mt-1" id="gps-coords-text">Requesting device coordinates...</div>
+                    </div>
+
+                    <!-- Camera Feed for Face Match -->
+                    <div class="camera-viewfinder-wrapper mb-3" style="min-height: 280px; max-width: 360px;">
+                        <video id="face-verify-video" autoplay playsinline muted style="width: 100%; display: block;"></video>
+                        <div class="camera-guide-circle" style="width: 180px; height: 230px;"></div>
+                        <canvas id="face-snapshot-canvas" style="display: none;"></canvas>
+                    </div>
+
+                    <!-- Step 3 Action Button -->
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-success py-3 fw-bold fs-5 shadow-sm" id="btn-final-submit" onclick="submitFullAttendance();">
+                            <i class="bi bi-shield-check me-1"></i> Verify Face & Mark Present
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Final Result Confirmation -->
+                <div id="view-result" style="display: none;" class="py-3">
+                    <div id="result-icon-container" class="mb-3"></div>
+                    <h4 class="fw-bold text-navy" id="result-title">Result Title</h4>
+                    <p class="text-muted small" id="result-message">Result message goes here.</p>
+
+                    <div class="p-3 bg-light rounded text-start small border mb-4" id="result-diagnostics">
+                        <!-- Filled by JS -->
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary bg-navy border-0">
+                            Return to Dashboard
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" onclick="resetToScanner();">
+                            Scan Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let html5QrcodeScanner = null;
+    let scannedToken = null;
+    let gpsCoords = null;
+    let faceStream = null;
+
+    function checkSecureContext() {
+        if (!window.isSecureContext) {
+            const httpsUrl = window.location.href.replace("http://", "https://");
+            const readerDiv = document.getElementById("reader");
+            if (readerDiv) {
+                readerDiv.innerHTML = `
+                    <div class="alert alert-warning text-start small p-3">
+                        <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation text-danger me-1"></i> HTTPS Required for Camera Access</div>
+                        <div>Android Chrome strictly disables the camera on insecure HTTP network connections.</div>
+                        <div class="mt-3">
+                            <a href="${httpsUrl}" class="btn btn-primary btn-sm fw-semibold">
+                                <i class="bi bi-shield-lock me-1"></i> Open via HTTPS
+                            </a>
+                        </div>
+                        <div class="text-muted mt-2" style="font-size: 0.8rem;">
+                            When Chrome shows <em>"Your connection is not private"</em>, tap <strong>Advanced &rarr; Proceed to ... (unsafe)</strong>.
+                        </div>
+                    </div>
+                `;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+        if (checkSecureContext()) {
+            initQrScanner();
+        }
+    });
+
+    async function initQrScanner() {
+        if (!checkSecureContext()) return;
+
+        const readerDiv = document.getElementById("reader");
+        readerDiv.innerHTML = "";
+
+        if (html5QrcodeScanner) {
+            try {
+                await html5QrcodeScanner.stop();
+            } catch (e) {}
+        }
+
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        const config = {
+            fps: 12,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                const size = Math.max(180, Math.floor(minEdge * 0.72));
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0
+        };
+
+        // Try back camera (environment) first
+        try {
+            await html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanError
+            );
+            return;
+        } catch (envErr) {
+            console.warn("Back camera environment start failed, trying user camera...", envErr);
+        }
+
+        // Fallback 1: Front camera (user)
+        try {
+            await html5QrcodeScanner.start(
+                { facingMode: "user" },
+                config,
+                onScanSuccess,
+                onScanError
+            );
+            return;
+        } catch (userErr) {
+            console.warn("Front camera start failed, trying camera enumeration...", userErr);
+        }
+
+        // Fallback 2: Camera enumeration deviceId
+        try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras && cameras.length > 0) {
+                const backCamera = cameras.find(c => c.label.toLowerCase().includes("back") || c.label.toLowerCase().includes("rear")) || cameras[0];
+                await html5QrcodeScanner.start(
+                    backCamera.id,
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+                return;
+            }
+        } catch (enumErr) {
+            console.warn("Camera enumeration failed:", enumErr);
+        }
+
+        // If all camera starts failed
+        let errMsg = "Unable to start camera preview.";
+        if (!window.isSecureContext) {
+            errMsg = "Camera access requires HTTPS. Please access via https://...";
+        } else {
+            errMsg = "Please ensure camera permissions are allowed in Android Chrome (tap address bar settings -> Site settings -> Camera -> Allow).";
+        }
+        readerDiv.innerHTML = `
+            <div class="alert alert-danger text-start small p-3">
+                <strong><i class="bi bi-camera-video-off me-1"></i> Camera Unavailable:</strong> ${errMsg}
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="initQrScanner();">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Retry Camera
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function onScanError(errorMessage) {
+        // Continuous scanning errors are normal while searching for QR
+    }
+
+    async function onScanSuccess(decodedText, decodedResult) {
+        if (!decodedText || scannedToken) return;
+
+        scannedToken = decodedText.trim();
+        document.getElementById("status-pill").innerText = "Validating QR...";
+        document.getElementById("status-pill").className = "badge bg-warning text-dark";
+
+        // Stop QR camera scanner
+        try {
+            await html5QrcodeScanner.stop();
+        } catch (e) {}
+
+        // Send pre-flight validate-qr request
+        try {
+            const resp = await fetch("{{ url_for('attendance.validate_qr_endpoint') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({ qr_token: scannedToken })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok && data.status === "success") {
+                // Advance to Step 2
+                proceedToLocationAndFace(data.session);
+            } else {
+                showFailureResult(data.outcome || "REJECTED_QR", data.message || "Invalid or expired QR token.");
+            }
+        } catch (err) {
+            showFailureResult("NETWORK_ERROR", `Network failure: ${err.message}`);
+        }
+    }
+
+    function restartQrScanner() {
+        scannedToken = null;
+        initQrScanner();
+    }
+
+    function proceedToLocationAndFace(sessionInfo) {
+        // Update Stepper
+        document.getElementById("badge-step-1").className = "badge rounded-pill bg-success px-3 py-2";
+        document.getElementById("badge-step-1").innerHTML = '<i class="bi bi-check-lg"></i> 1. QR OK';
+        document.getElementById("badge-step-2").className = "badge rounded-pill bg-primary px-3 py-2";
+        document.getElementById("card-header-title").innerHTML = '<i class="bi bi-geo-alt-fill me-2 text-primary"></i> Step 2 & 3: GPS & Face Verification';
+        document.getElementById("status-pill").innerText = "Acquiring GPS...";
+        document.getElementById("status-pill").className = "badge bg-info text-dark";
+
+        // Populate Lecture info
+        document.getElementById("info-subject").innerText = `${sessionInfo.subject_code} - ${sessionInfo.subject_name}`;
+        document.getElementById("info-class").innerText = sessionInfo.class_name;
+        document.getElementById("info-classroom").innerText = sessionInfo.classroom_name;
+        document.getElementById("info-radius").innerText = sessionInfo.allowed_radius_meters;
+
+        // Switch View
+        document.getElementById("view-qr-scanner").style.display = "none";
+        document.getElementById("view-face-location").style.display = "block";
+
+        // Acquire GPS Location
+        acquireLocation();
+
+        // Start Front Camera for Face Match
+        startFaceCamera();
+    }
+
+    function acquireLocation() {
+        const gpsBadge = document.getElementById("gps-badge");
+        const gpsText = document.getElementById("gps-coords-text");
+
+        if (!navigator.geolocation) {
+            gpsBadge.className = "badge bg-danger";
+            gpsBadge.innerText = "Unsupported";
+            gpsText.innerText = "Browser Geolocation is not supported on this device.";
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                gpsCoords = {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                };
+
+                gpsBadge.className = "badge bg-success";
+                gpsBadge.innerText = `Accurate (±${Math.round(pos.coords.accuracy)}m)`;
+                gpsText.innerText = `Lat: ${pos.coords.latitude.toFixed(6)}, Lon: ${pos.coords.longitude.toFixed(6)}`;
+
+                // Update stepper to face check
+                document.getElementById("badge-step-2").className = "badge rounded-pill bg-success px-3 py-2";
+                document.getElementById("badge-step-2").innerHTML = '<i class="bi bi-check-lg"></i> 2. GPS OK';
+                document.getElementById("badge-step-3").className = "badge rounded-pill bg-primary px-3 py-2";
+                document.getElementById("status-pill").innerText = "Ready for Face Match";
+                document.getElementById("status-pill").className = "badge bg-primary";
+            },
+            function(err) {
+                gpsBadge.className = "badge bg-danger";
+                gpsBadge.innerText = "Location Denied";
+                gpsText.innerText = `Error: ${err.message}. Please enable location permissions in browser settings.`;
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+    }
+
+    async function startFaceCamera() {
+        const video = document.getElementById("face-verify-video");
+        try {
+            if (faceStream) {
+                faceStream.getTracks().forEach(t => t.stop());
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("getUserMedia is unavailable. HTTPS is required.");
+            }
+
+            const candidateConstraints = [
+                { video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+                { video: { facingMode: "user" }, audio: false },
+                { video: { facingMode: { ideal: "user" } }, audio: false },
+                { video: true, audio: false }
+            ];
+
+            let lastErr = null;
+            for (const constraints of candidateConstraints) {
+                try {
+                    faceStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                }
+            }
+
+            if (!faceStream) {
+                throw lastErr;
+            }
+
+            // Setup video attributes for Android Chrome
+            video.srcObject = faceStream;
+            video.setAttribute("playsinline", "true");
+            video.setAttribute("webkit-playsinline", "true");
+            video.setAttribute("autoplay", "true");
+            video.muted = true;
+
+            // Wait for metadata loaded
+            await new Promise((resolve) => {
+                if (video.readyState >= 1) return resolve();
+                video.onloadedmetadata = () => resolve();
+                setTimeout(resolve, 800);
+            });
+
+            // Explicit play for Android Chrome
+            try {
+                await video.play();
+            } catch (playErr) {
+                console.warn("Face video play error:", playErr);
+            }
+
+        } catch (err) {
+            console.error("Face camera start failed:", err);
+            alert(`Face camera access error: ${err.message}. Please allow camera permissions.`);
+        }
+    }
+
+    async function submitFullAttendance() {
+        if (!gpsCoords) {
+            alert("Waiting for GPS coordinates. Please allow device location access.");
+            acquireLocation();
+            return;
+        }
+
+        const btn = document.getElementById("btn-final-submit");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Verifying Face & Coordinates...';
+
+        // Snapshot face from video
+        const video = document.getElementById("face-verify-video");
+        if (!video.videoWidth || !video.videoHeight) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-shield-check me-1"></i> Verify Face & Mark Present';
+            alert("Camera frame is still warming up. Please wait 1 second and tap Verify Face again.");
+            return;
+        }
+
+        const canvas = document.getElementById("face-snapshot-canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const faceB64 = canvas.toDataURL("image/jpeg", 0.85);
+
+        // Stop face camera stream
+        if (faceStream) {
+            faceStream.getTracks().forEach(t => t.stop());
+        }
+
+        try {
+            const resp = await fetch("{{ url_for('attendance.submit_attendance') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({
+                    qr_token: scannedToken,
+                    latitude: gpsCoords.latitude,
+                    longitude: gpsCoords.longitude,
+                    accuracy: gpsCoords.accuracy,
+                    face_image: faceB64
+                })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok && data.status === "SUCCESS") {
+                showSuccessResult(data);
+            } else {
+                showFailureResult(data.outcome, data.message, data);
+            }
+        } catch (err) {
+            showFailureResult("NETWORK_ERROR", `Attendance submission failed: ${err.message}`);
+        }
+    }
+
+    function showSuccessResult(data) {
+        document.getElementById("badge-step-3").className = "badge rounded-pill bg-success px-3 py-2";
+        document.getElementById("badge-step-3").innerHTML = '<i class="bi bi-check-lg"></i> 3. Face OK';
+        document.getElementById("card-header-title").innerHTML = '<i class="bi bi-check-circle-fill text-success me-2"></i> Attendance Confirmed';
+        document.getElementById("status-pill").innerText = "PRESENT";
+        document.getElementById("status-pill").className = "badge bg-success";
+
+        document.getElementById("view-qr-scanner").style.display = "none";
+        document.getElementById("view-face-location").style.display = "none";
+        document.getElementById("view-result").style.display = "block";
+
+        document.getElementById("result-icon-container").innerHTML = `
+            <div class="d-inline-flex p-3 bg-success-subtle text-success rounded-circle shadow-sm">
+                <i class="bi bi-patch-check-fill display-3"></i>
+            </div>
+        `;
+        document.getElementById("result-title").innerText = "Attendance Marked PRESENT!";
+        document.getElementById("result-message").innerText = data.message;
+
+        document.getElementById("result-diagnostics").innerHTML = `
+            <div><b>Subject:</b> ${data.subject_name}</div>
+            <div><b>Classroom:</b> ${data.classroom}</div>
+            <div><b>Calculated Distance:</b> ${data.distance_meters}m from classroom center</div>
+            <div><b>Face Match Confidence:</b> ${(data.face_similarity * 100).toFixed(1)}%</div>
+            <div><b>Timestamp:</b> ${data.timestamp}</div>
+        `;
+    }
+
+    function showFailureResult(outcome, message, details = {}) {
+        document.getElementById("card-header-title").innerHTML = '<i class="bi bi-x-circle-fill text-danger me-2"></i> Verification Failed';
+        document.getElementById("status-pill").innerText = outcome || "FAILED";
+        document.getElementById("status-pill").className = "badge bg-danger";
+
+        document.getElementById("view-qr-scanner").style.display = "none";
+        document.getElementById("view-face-location").style.display = "none";
+        document.getElementById("view-result").style.display = "block";
+
+        document.getElementById("result-icon-container").innerHTML = `
+            <div class="d-inline-flex p-3 bg-danger-subtle text-danger rounded-circle shadow-sm">
+                <i class="bi bi-exclamation-triangle-fill display-3"></i>
+            </div>
+        `;
+        document.getElementById("result-title").innerText = "Verification Unsuccessful";
+        document.getElementById("result-message").innerText = message;
+
+        let diagHtml = `<div><b>Failure Category:</b> <span class="badge bg-danger">${outcome}</span></div>`;
+        if (details.distance_meters !== undefined) {
+            diagHtml += `<div><b>Calculated Distance:</b> ${details.distance_meters}m</div>`;
+        }
+        if (details.face_similarity !== undefined) {
+            diagHtml += `<div><b>Similarity Score:</b> ${(details.face_similarity * 100).toFixed(1)}%</div>`;
+        }
+        diagHtml += `<div class="mt-2 text-muted">A verification event has been recorded for faculty review. If this was a technical error (e.g. GPS drift), please request faculty review.</div>`;
+
+        document.getElementById("result-diagnostics").innerHTML = diagHtml;
+    }
+
+    function resetToScanner() {
+        scannedToken = null;
+        gpsCoords = null;
+        if (faceStream) faceStream.getTracks().forEach(t => t.stop());
+
+        document.getElementById("badge-step-1").className = "badge rounded-pill bg-primary px-3 py-2";
+        document.getElementById("badge-step-1").innerText = "1. Scan QR";
+        document.getElementById("badge-step-2").className = "badge rounded-pill bg-light text-muted border px-3 py-2";
+        document.getElementById("badge-step-2").innerText = "2. GPS Check";
+        document.getElementById("badge-step-3").className = "badge rounded-pill bg-light text-muted border px-3 py-2";
+        document.getElementById("badge-step-3").innerText = "3. Face Verify";
+
+        document.getElementById("view-result").style.display = "none";
+        document.getElementById("view-face-location").style.display = "none";
+        document.getElementById("view-qr-scanner").style.display = "block";
+        document.getElementById("card-header-title").innerHTML = '<i class="bi bi-qr-code-scan me-2 text-warning"></i> Step 1: Scan Attendance QR Code';
+        document.getElementById("status-pill").innerText = "Awaiting Scan";
+        document.getElementById("status-pill").className = "badge bg-light text-dark";
+
+        initQrScanner();
+    }
+</script>
+{% endblock %}

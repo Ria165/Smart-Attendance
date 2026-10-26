@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Faculty Dashboard - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Faculty Dashboard</h3>
+        <p class="text-muted small mb-0">Overview of active attendance sessions, class enrollments, and integrity alerts</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('staff.create_session') }}" class="btn btn-primary bg-navy border-0">
+            <i class="bi bi-plus-circle me-1"></i> Start Attendance Session
+        </a>
+        <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-file-earmark-text me-1"></i> Reports
+        </a>
+    </div>
+</div>
+
+<!-- Active Running Sessions Banner -->
+{% if active_sessions %}
+<div class="card border-primary border-2 shadow-sm mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-bold"><span class="pulse-indicator me-2"></span> Active Running Sessions</span>
+        <span class="badge bg-white text-primary">{{ active_sessions|length }} Live</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {% for sess in active_sessions %}
+            <div class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center p-3">
+                <div class="mb-2 mb-md-0">
+                    <span class="badge bg-navy me-2">{{ sess.subject.subject_code }}</span>
+                    <strong class="text-navy">{{ sess.subject.subject_name }}</strong>
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-people me-1"></i> {{ sess.academic_class.name }} &bull; 
+                        <i class="bi bi-geo-alt me-1"></i> {{ sess.classroom.classroom_name }} &bull;
+                        <i class="bi bi-clock me-1"></i> Started: {{ sess.start_time.strftime('%H:%M UTC') }}
+                    </div>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <a href="{{ url_for('staff.live_session', session_id=sess.id) }}" class="btn btn-sm btn-success">
+                        <i class="bi bi-qr-code me-1"></i> Present QR Screen
+                    </a>
+                    <form method="POST" action="{{ url_for('staff.close_session', session_id=sess.id) }}" onsubmit="return confirm('Close attendance session?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Close</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Metrics Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <a href="{{ url_for('staff.sessions') }}" class="dashboard-card-link" aria-label="Total Sessions: {{ total_sessions }}">
+            <div class="card border-0 shadow-sm h-100 dashboard-metric-card">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 rounded-3 bg-light text-primary me-3">
+                        <i class="bi bi-broadcast fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Total Sessions</div>
+                        <h3 class="fw-bold text-navy mb-0">{{ total_sessions }}</h3>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a href="{{ url_for('staff.subjects') }}" class="dashboard-card-link" aria-label="Assigned Students: {{ total_students }}">
+            <div class="card border-0 shadow-sm h-100 dashboard-metric-card">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 rounded-3 bg-light text-success me-3">
+                        <i class="bi bi-people-fill fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Assigned Students</div>
+                        <h3 class="fw-bold text-navy mb-0">{{ total_students }}</h3>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a href="{{ url_for('staff.attendance_records', status='PRESENT') }}" class="dashboard-card-link" aria-label="Total Present: {{ total_present }}">
+            <div class="card border-0 shadow-sm h-100 dashboard-metric-card">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 rounded-3 bg-light text-info me-3">
+                        <i class="bi bi-check2-circle fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Total Present</div>
+                        <h3 class="fw-bold text-navy mb-0">{{ total_present }}</h3>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a href="{{ url_for('staff.student_approvals') }}" class="dashboard-card-link" aria-label="Pending Approvals: {{ pending_approvals_count }}">
+            <div class="card border-0 shadow-sm h-100 dashboard-metric-card">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 rounded-3 bg-light text-warning me-3">
+                        <i class="bi bi-person-exclamation fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Pending Approvals</div>
+                        <h3 class="fw-bold text-navy mb-0">{{ pending_approvals_count }}</h3>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Recent Attendance Submissions -->
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-clock-history me-2"></i> Recent Attendance Submissions</h6>
+                <a href="{{ url_for('staff.attendance_records') }}" class="small text-decoration-none">View All &rarr;</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Subject</th>
+                            <th>Timestamp</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in recent_records %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold text-navy">{{ r.student.user.full_name }}</div>
+                                <small class="text-muted">{{ r.student.student_id }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ r.subject.subject_code }}</span>
+                            </td>
+                            <td class="small text-muted">
+                                {{ r.marked_timestamp.strftime('%H:%M:%S') }}
+                            </td>
+                            <td>
+                                <span class="badge {{ r.final_status|status_badge }}">{{ r.final_status }}</span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted small">No attendance records yet today.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suspicious Verification Alerts -->
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-shield-exclamation text-danger me-2"></i> Suspicious Activity Alerts
+                </h6>
+                <a href="{{ url_for('staff.alerts') }}" class="small text-decoration-none">Review ({{ recent_alerts|length }}) &rarr;</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for ev in recent_alerts %}
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="badge bg-danger text-uppercase" style="font-size: 0.7rem;">{{ ev.failure_category }}</span>
+                            <small class="text-muted">{{ ev.recorded_at.strftime('%H:%M') }}</small>
+                        </div>
+                        <div class="small fw-semibold text-dark">
+                            {% if ev.student %}
+                                Student: {{ ev.student.student_id }} ({{ ev.student.user.full_name }})
+                            {% else %}
+                                Unknown Device Attempt
+                            {% endif %}
+                        </div>
+                        <p class="small text-muted mb-0 mt-1">{{ ev.details }}</p>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted small">
+                        <i class="bi bi-check-circle text-success fs-3 d-block mb-2"></i>
+                        No suspicious alerts pending review.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

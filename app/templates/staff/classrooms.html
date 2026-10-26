@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Classroom Locations - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Classroom Location Management</h3>
+        <p class="text-muted small mb-0">Register classroom coordinates and allowed GPS geofence radiuses</p>
+    </div>
+</div>
+
+<div class="alert alert-warning py-2 small mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+    <b>GPS Limitations:</b> Satellite signals experience multi-path reflection and attenuation indoors. Configured geofences represent physical coordinate tolerances (&plusmn; accuracy circle), not foolproof proof of indoor presence.
+</div>
+
+<div class="row g-4">
+    <!-- Map & Location Form -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-geo-alt-fill text-danger me-2"></i> Register Classroom Coordinates
+                </h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-current-location">
+                    <i class="bi bi-crosshair me-1"></i> Use My Current Location
+                </button>
+            </div>
+            <div class="card-body">
+                <!-- Interactive Leaflet Map -->
+                <div id="map" class="mb-3"></div>
+                <div class="small text-muted mb-3">
+                    <i class="bi bi-info-circle me-1"></i> Click anywhere on the map to set coordinates, or click <b>"Use My Current Location"</b>.
+                </div>
+
+                <form method="POST" action="{{ url_for('staff.classrooms') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Classroom Name</label>
+                            <input type="text" class="form-control" name="classroom_name" placeholder="e.g. Turing Lecture Hall" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Building Name</label>
+                            <input type="text" class="form-control" name="building_name" placeholder="e.g. Science Block" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Room Number</label>
+                            <input type="text" class="form-control" name="room_number" placeholder="e.g. Room 101" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Latitude</label>
+                            <input type="number" step="any" class="form-control" id="input-lat" name="latitude" placeholder="12.9716" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted">Longitude</label>
+                            <input type="number" step="any" class="form-control" id="input-lon" name="longitude" placeholder="77.5946" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted d-flex justify-content-between">
+                                <span>Allowed Geofence Radius: <b id="radius-val">50</b> meters</span>
+                                <span class="text-muted">(Default: 50m)</span>
+                            </label>
+                            <input type="range" class="form-range" id="input-radius" name="allowed_radius_meters" min="15" max="150" step="5" value="50">
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary bg-navy border-0 py-2 fw-semibold">
+                            <i class="bi bi-save me-1"></i> Save Classroom Location
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Saved Classrooms Table -->
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-buildings me-2"></i> Saved Classrooms ({{ classrooms|length }})
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for c in classrooms %}
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h6 class="mb-0 fw-bold text-navy">{{ c.classroom_name }}</h6>
+                            <span class="badge bg-light text-dark border">{{ c.allowed_radius_meters }}m radius</span>
+                        </div>
+                        <div class="small text-muted">
+                            <i class="bi bi-building me-1"></i> {{ c.building_name }} &bull; Room {{ c.room_number }}
+                        </div>
+                        <div class="small text-muted font-monospace mt-1">
+                            Coordinates: {{ "%.5f"|format(c.latitude) }}, {{ "%.5f"|format(c.longitude) }}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5 text-muted small">
+                        No classrooms saved yet. Use the map to register your classroom location.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Initialize Leaflet Map (defaults to Bangalore or staff position)
+    let defaultLat = 12.9716;
+    let defaultLon = 77.5946;
+
+    const map = L.map('map').setView([defaultLat, defaultLon], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker = null;
+    let circle = null;
+
+    function setCoordinates(lat, lon, radius = 50) {
+        document.getElementById("input-lat").value = lat.toFixed(6);
+        document.getElementById("input-lon").value = lon.toFixed(6);
+
+        if (marker) map.removeLayer(marker);
+        if (circle) map.removeLayer(circle);
+
+        marker = L.marker([lat, lon]).addTo(map);
+        circle = L.circle([lat, lon], {
+            radius: radius,
+            color: '#1B365D',
+            fillColor: '#38BDF8',
+            fillOpacity: 0.25
+        }).addTo(map);
+
+        map.panTo([lat, lon]);
+    }
+
+    // Set initial pin
+    setCoordinates(defaultLat, defaultLon, 50);
+
+    // Map click handler
+    map.on('click', function(e) {
+        const radius = parseInt(document.getElementById("input-radius").value, 10);
+        setCoordinates(e.latlng.lat, e.latlng.lng, radius);
+    });
+
+    // Radius slider handler
+    document.getElementById("input-radius").addEventListener("input", function(e) {
+        const val = e.target.value;
+        document.getElementById("radius-val").innerText = val;
+        if (circle) {
+            circle.setRadius(parseInt(val, 10));
+        }
+    });
+
+    // "Use My Current Location" button handler
+    document.getElementById("btn-current-location").addEventListener("click", function() {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your current browser.");
+            return;
+        }
+
+        const btn = this;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Locating...';
+        btn.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                btn.innerHTML = '<i class="bi bi-crosshair me-1"></i> Use My Current Location';
+                btn.disabled = false;
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                const acc = Math.round(pos.coords.accuracy);
+                const radius = parseInt(document.getElementById("input-radius").value, 10);
+
+                setCoordinates(lat, lon, radius);
+                alert(`Location captured successfully! Reported accuracy: ±${acc}m.`);
+            },
+            function(err) {
+                btn.innerHTML = '<i class="bi bi-crosshair me-1"></i> Use My Current Location';
+                btn.disabled = false;
+                alert(`Could not capture location: ${err.message}. Please click on the map directly.`);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+</script>
+{% endblock %}

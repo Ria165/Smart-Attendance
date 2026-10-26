@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Create Attendance Session - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center py-3">
+    <div class="col-md-9 col-lg-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-navy text-white p-3">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-qr-code me-2"></i> Launch Attendance Session</h5>
+                <small class="text-white-50">Generate a cryptographically dynamic QR code session for your lecture</small>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('staff.create_session') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Subject Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-navy">Select Subject & Assigned Class</label>
+                        <select class="form-select" name="subject_id" required>
+                            <option value="" disabled selected>-- Select Authorized Subject --</option>
+                            {% for s in subjects %}
+                                <option value="{{ s.id }}">
+                                    [{{ s.subject_code }}] {{ s.subject_name }} &mdash; Class: {{ s.assigned_class.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Only subjects you are authorized to teach appear in this list.</div>
+                    </div>
+
+                    <!-- Classroom Selection -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold text-navy mb-0">Classroom Location</label>
+                            <a href="{{ url_for('staff.classrooms') }}" class="small text-decoration-none">
+                                <i class="bi bi-plus-circle me-1"></i> Register New Classroom
+                            </a>
+                        </div>
+                        <select class="form-select" name="classroom_id" required>
+                            <option value="" disabled selected>-- Select Classroom GPS Location --</option>
+                            {% for c in classrooms %}
+                                <option value="{{ c.id }}">
+                                    {{ c.classroom_name }} ({{ c.building_name }} - {{ c.room_number }}) &bull; Radius: {{ c.allowed_radius_meters }}m
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Student GPS coordinates will be verified against this classroom boundary.</div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <!-- QR Refresh Interval -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-navy">QR Refresh Interval (Seconds)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="refresh_interval_seconds" value="30" min="15" max="120" required>
+                                <span class="input-group-text bg-light text-muted">Sec</span>
+                            </div>
+                            <div class="form-text small">Tokens expire automatically every 30s to prevent photo sharing.</div>
+                        </div>
+
+                        <!-- Session Duration -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-navy">Lecture Duration</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="duration_minutes" value="60" min="15" max="240" required>
+                                <span class="input-group-text bg-light text-muted">Mins</span>
+                            </div>
+                            <div class="form-text small">Session closes automatically after scheduled duration.</div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary bg-navy border-0 py-2 fw-semibold">
+                            <i class="bi bi-play-circle me-1"></i> Generate Dynamic QR Code Screen
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

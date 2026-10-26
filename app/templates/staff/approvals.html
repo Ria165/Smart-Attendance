@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Account Approvals - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Account Approvals & Verification</h3>
+        <p class="text-muted small mb-0">Authorize pending student registrations and faculty colleague accounts</p>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-4" id="approvalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-semibold" id="students-tab" data-bs-toggle="tab" data-bs-target="#students-pane" type="button" role="tab">
+            <i class="bi bi-mortarboard me-1"></i> Pending Students
+            <span class="badge bg-warning text-dark ms-1">{{ pending_students|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="staff-tab" data-bs-toggle="tab" data-bs-target="#staff-pane" type="button" role="tab">
+            <i class="bi bi-person-workspace me-1"></i> Pending Staff
+            <span class="badge bg-info text-dark ms-1">{{ pending_staff|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved-pane" type="button" role="tab">
+            <i class="bi bi-check2-circle me-1"></i> Approved Students
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="rejected-tab" data-bs-toggle="tab" data-bs-target="#rejected-pane" type="button" role="tab">
+            <i class="bi bi-x-circle me-1"></i> Rejected Accounts
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="approvalTabsContent">
+    <!-- PENDING STUDENTS TAB -->
+    <div class="tab-pane fade show active" id="students-pane" role="tabpanel">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-person-fill-exclamation text-warning me-2"></i> Pending Student Queue ({{ pending_students|length }})
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Student ID / Roll No</th>
+                                <th>College Email</th>
+                                <th>Assigned Class</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in pending_students %}
+                            <tr>
+                                <td><strong class="text-navy">{{ u.full_name }}</strong></td>
+                                <td><span class="badge bg-light text-dark border font-monospace">{{ u.student_profile.student_id if u.student_profile else 'N/A' }}</span></td>
+                                <td>{{ u.email }}</td>
+                                <td>
+                                    {% if u.student_profile and u.student_profile.assigned_class %}
+                                        <span class="badge bg-info-subtle text-info-emphasis">{{ u.student_profile.assigned_class.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Unassigned</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">{{ u.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+                                <td class="text-end">
+                                    <form method="POST" action="{{ url_for('staff.student_approvals') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <input type="hidden" name="action" value="approve">
+                                        <button type="submit" class="btn btn-sm btn-success me-1">
+                                            <i class="bi bi-check-lg me-1"></i> Approve
+                                        </button>
+                                    </form>
+
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="openRejectModal('{{ u.id }}', '{{ u.full_name }}', '{{ u.email }}');">
+                                        <i class="bi bi-x-lg me-1"></i> Reject
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-check2-all text-success fs-2 d-block mb-2"></i>
+                                    No pending student registrations waiting for approval.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PENDING STAFF TAB -->
+    <div class="tab-pane fade" id="staff-pane" role="tabpanel">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold text-navy">
+                    <i class="bi bi-person-workspace text-primary me-2"></i> Pending Faculty Colleagues ({{ pending_staff|length }})
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Faculty Name</th>
+                                <th>Staff ID</th>
+                                <th>College Email</th>
+                                <th>Department & Designation</th>
+                                <th>Registration Date</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in pending_staff %}
+                            <tr>
+                                <td><strong class="text-navy">Prof. {{ u.full_name }}</strong></td>
+                                <td><span class="badge bg-light text-dark border font-monospace">{{ u.staff_profile.staff_id if u.staff_profile else 'N/A' }}</span></td>
+                                <td>{{ u.email }}</td>
+                                <td>
+                                    {% if u.staff_profile %}
+                                        <span class="badge bg-light text-dark border">{{ u.staff_profile.department }} &bull; {{ u.staff_profile.designation }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">{{ u.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+                                <td class="text-end">
+                                    <form method="POST" action="{{ url_for('staff.student_approvals') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <input type="hidden" name="action" value="approve">
+                                        <button type="submit" class="btn btn-sm btn-success me-1">
+                                            <i class="bi bi-check-lg me-1"></i> Authorize Staff
+                                        </button>
+                                    </form>
+
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="openRejectModal('{{ u.id }}', '{{ u.full_name }}', '{{ u.email }}');">
+                                        <i class="bi bi-x-lg me-1"></i> Reject
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-check-circle text-success fs-2 d-block mb-2"></i>
+                                    No pending faculty accounts waiting for verification.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPROVED STUDENTS TAB -->
+    <div class="tab-pane fade" id="approved-pane" role="tabpanel">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-person-check-fill text-success me-2"></i> Authorized Student Directory</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Student ID</th>
+                                <th>Email</th>
+                                <th>Class</th>
+                                <th>Biometric Face Status</th>
+                                <th>Approved By</th>
+                                <th>Approved Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in approved_students %}
+                            <tr>
+                                <td><strong class="text-dark">{{ u.full_name }}</strong></td>
+                                <td><span class="font-monospace text-muted">{{ u.student_profile.student_id if u.student_profile else 'N/A' }}</span></td>
+                                <td>{{ u.email }}</td>
+                                <td>{{ u.student_profile.assigned_class.name if u.student_profile and u.student_profile.assigned_class else '-' }}</td>
+                                <td>
+                                    {% if u.student_profile and u.student_profile.face_enrolled %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i> Enrolled</span>
+                                    {% else %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"><i class="bi bi-clock me-1"></i> Not Enrolled</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">
+                                    {% if u.approved_by %}
+                                        Prof. {{ u.approved_by.user.full_name }}
+                                    {% else %}
+                                        System Setup
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">
+                                    {{ u.approved_at.strftime('%Y-%m-%d %H:%M') if u.approved_at else u.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">No approved students found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- REJECTED ACCOUNTS TAB -->
+    <div class="tab-pane fade" id="rejected-pane" role="tabpanel">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold text-navy"><i class="bi bi-x-octagon text-danger me-2"></i> Rejected Account Records</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Email</th>
+                                <th>Rejection Reason</th>
+                                <th>Date Rejected</th>
+                                <th class="text-end">Re-evaluate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in rejected_students %}
+                            <tr>
+                                <td>{{ u.full_name }}</td>
+                                <td><span class="badge bg-secondary text-uppercase">{{ u.role }}</span></td>
+                                <td>{{ u.email }}</td>
+                                <td class="small text-danger">{{ u.rejection_reason or 'Registration rejected' }}</td>
+                                <td class="small text-muted">{{ u.rejected_at.strftime('%Y-%m-%d %H:%M UTC') if u.rejected_at else '-' }}</td>
+                                <td class="text-end">
+                                    <form method="POST" action="{{ url_for('staff.student_approvals') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <input type="hidden" name="action" value="approve">
+                                        <button type="submit" class="btn btn-sm btn-outline-success">
+                                            <i class="bi bi-arrow-repeat me-1"></i> Re-approve
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted small">No rejected accounts.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-x-circle me-2"></i> Reject Registration Request</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('staff.student_approvals') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="user_id" id="modal-reject-user-id">
+                <input type="hidden" name="action" value="reject">
+
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-3">
+                        Are you sure you want to reject the registration request for <strong id="modal-reject-name"></strong> (<span id="modal-reject-email"></span>)?
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Reason for Rejection (Optional)</label>
+                        <input type="text" class="form-control" name="reason" placeholder="e.g. Invalid Roll No / Not enrolled in this department">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Confirm Rejection</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+
+    function openRejectModal(userId, name, email) {
+        document.getElementById('modal-reject-user-id').value = userId;
+        document.getElementById('modal-reject-name').innerText = name;
+        document.getElementById('modal-reject-email').innerText = email;
+        rejectModal.show();
+    }
+</script>
+{% endblock %}

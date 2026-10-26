@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Live Attendance Session - {{ attendance_session.subject.subject_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2">
+    <!-- Header Controls -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 pb-3 border-bottom gap-2">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="pulse-indicator"></span>
+                <h4 class="fw-bold text-navy mb-0">{{ attendance_session.subject.subject_code }}: {{ attendance_session.subject.subject_name }}</h4>
+            </div>
+            <div class="text-muted small mt-1">
+                Class: <strong class="text-dark">{{ attendance_session.academic_class.name }}</strong> &bull; 
+                Room: <strong class="text-dark">{{ attendance_session.classroom.classroom_name }}</strong> &bull;
+                GPS Radius: <strong class="text-dark">{{ attendance_session.classroom.allowed_radius_meters }}m</strong>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 align-items-center">
+            <button id="fullscreen-btn" class="btn btn-outline-secondary btn-sm" onclick="toggleFullScreen();">
+                <i class="bi bi-arrows-fullscreen me-1"></i> Projector Mode
+            </button>
+            <form method="POST" action="{{ url_for('staff.close_session', session_id=attendance_session.id) }}" onsubmit="return confirm('Are you sure you want to conclude this attendance session? All active tokens will be invalidated.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-sm">
+                    <i class="bi bi-stop-circle me-1"></i> Close Session
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-4 align-items-stretch" id="presentation-area">
+        <!-- Live QR Code Card -->
+        <div class="col-lg-7 text-center">
+            <div class="card shadow-sm border-0 h-100 p-4 d-flex flex-column align-items-center justify-content-center bg-white">
+                <div class="mb-3">
+                    <span class="badge bg-navy px-3 py-2 fs-6">
+                        <i class="bi bi-shield-check text-primary-accent me-1"></i> Anti-Proxy Dynamic QR
+                    </span>
+                </div>
+
+                <!-- Dynamic QR Image -->
+                <div class="live-qr-container my-2">
+                    <img id="active-qr-image" src="{{ qr_image }}" alt="Dynamic Session QR Code" class="qr-image shadow-sm">
+                </div>
+
+                <!-- Countdown Timer -->
+                <div class="mt-3">
+                    <div class="d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi bi-arrow-repeat spin text-primary fs-5" id="refresh-icon"></i>
+                        <span class="text-muted small">Token refreshes in:</span>
+                        <span id="countdown-badge" class="badge bg-primary countdown-badge">
+                            <span id="countdown-timer">{{ metadata.remaining_seconds }}</span>s
+                        </span>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-lock me-1"></i> Unpredictable cryptographic token &bull; Screen photos expire automatically
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Stats & Live Ticker -->
+        <div class="col-lg-5">
+            <div class="d-flex flex-column h-100 gap-3">
+                <!-- Counter Card -->
+                <div class="card border-0 shadow-sm p-4 bg-navy text-white">
+                    <div class="row text-center align-items-center">
+                        <div class="col-6 border-end border-white-50">
+                            <div class="text-white-50 small text-uppercase fw-semibold">Present</div>
+                            <h1 class="display-4 fw-bold text-primary-accent mb-0" id="present-count">{{ present_count }}</h1>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-white-50 small text-uppercase fw-semibold">Total Enrolled</div>
+                            <h1 class="display-4 fw-bold mb-0" id="total-enrolled">{{ total_enrolled }}</h1>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Check-in Feed -->
+                <div class="card border-0 shadow-sm flex-grow-1">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold text-navy">
+                            <i class="bi bi-person-check text-success me-2"></i> Verified Check-Ins
+                        </h6>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Live Updates</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush" id="recent-students-list">
+                            <li class="list-group-item text-center text-muted py-4 small" id="waiting-placeholder">
+                                Waiting for students to scan and verify...
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let remainingSeconds = {{ metadata.remaining_seconds }};
+    const refreshInterval = {{ attendance_session.refresh_interval_seconds or 30 }};
+    const pollUrl = "{{ url_for('staff.session_qr_poll', session_id=attendance_session.id) }}";
+
+    function updateCountdown() {
+        const timerEl = document.getElementById("countdown-timer");
+        const badgeEl = document.getElementById("countdown-badge");
+
+        if (remainingSeconds <= 0) {
+            fetchFreshQR();
+        } else {
+            if (timerEl) timerEl.innerText = remainingSeconds;
+            if (remainingSeconds <= 5) {
+                badgeEl.className = "badge bg-danger countdown-badge";
+            } else if (remainingSeconds <= 10) {
+                badgeEl.className = "badge bg-warning text-dark countdown-badge";
+            } else {
+                badgeEl.className = "badge bg-primary countdown-badge";
+            }
+            remainingSeconds--;
+        }
+    }
+
+    async function fetchFreshQR() {
+        try {
+            const resp = await fetch(pollUrl);
+            const data = await resp.json();
+
+            if (data.status === "active") {
+                document.getElementById("active-qr-image").src = data.qr_image;
+                remainingSeconds = data.metadata.remaining_seconds || refreshInterval;
+                document.getElementById("present-count").innerText = data.present_count;
+                document.getElementById("total-enrolled").innerText = data.total_enrolled;
+
+                // Update recent check-in list
+                const listEl = document.getElementById("recent-students-list");
+                if (data.recent_students && data.recent_students.length > 0) {
+                    listEl.innerHTML = "";
+                    data.recent_students.forEach(st => {
+                        const li = document.createElement("li");
+                        li.className = "list-group-item d-flex justify-content-between align-items-center py-2";
+                        li.innerHTML = `
+                            <div>
+                                <span class="fw-semibold text-dark">${st.name}</span>
+                                <small class="text-muted d-block">${st.student_id}</small>
+                            </div>
+                            <span class="badge bg-light text-muted border">${st.time}</span>
+                        `;
+                        listEl.appendChild(li);
+                    });
+                }
+            } else if (data.status === "closed") {
+                window.location.href = "{{ url_for('staff.attendance_records', session_id=attendance_session.id) }}";
+            }
+        } catch (err) {
+            console.error("QR poll error:", err);
+            remainingSeconds = 5; // retry quickly on network hiccup
+        }
+    }
+
+    const countdownInterval = setInterval(updateCountdown, 1000);
+
+    function toggleFullScreen() {
+        const elem = document.getElementById("presentation-area");
+        if (!document.fullscreenElement) {
+            elem.requestFullscreen().catch(err => {
+                alert(`Error entering fullscreen: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+</script>
+{% endblock %}

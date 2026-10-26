@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Sessions - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
+    <div>
+        <h3 class="fw-bold text-navy mb-1">Attendance Sessions</h3>
+        <p class="text-muted small mb-0">History of all initiated lecture sessions and dynamic QR attendance windows</p>
+    </div>
+    <div>
+        <a href="{{ url_for('staff.create_session') }}" class="btn btn-primary bg-navy border-0">
+            <i class="bi bi-plus-circle me-1"></i> Start Attendance Session
+        </a>
+    </div>
+</div>
+
+<!-- Sessions Table Card -->
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold text-navy">
+            <i class="bi bi-broadcast text-primary me-2"></i> Conducted Sessions ({{ sessions|length }})
+        </h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Subject & Class</th>
+                        <th>Classroom</th>
+                        <th>Start Time</th>
+                        <th>Duration / End</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sess in sessions %}
+                    <tr>
+                        <td>
+                            <strong class="text-navy">{{ sess.subject.subject_code }}</strong>
+                            <div class="small text-muted">{{ sess.subject.subject_name }} &bull; {{ sess.academic_class.name }}</div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-geo-alt me-1"></i>{{ sess.classroom.classroom_name }} ({{ sess.classroom.room_number }})
+                            </span>
+                        </td>
+                        <td class="small">
+                            <div>{{ sess.start_time.strftime('%Y-%m-%d') }}</div>
+                            <div class="text-muted">{{ sess.start_time.strftime('%H:%M:%S UTC') }}</div>
+                        </td>
+                        <td class="small text-muted">
+                            {% if sess.end_time %}
+                                {{ sess.end_time.strftime('%H:%M:%S UTC') }}
+                            {% else %}
+                                &mdash;
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if sess.is_active and not sess.is_cancelled %}
+                                <span class="badge bg-success"><span class="pulse-indicator me-1"></span> Active Live</span>
+                            {% elif sess.is_cancelled %}
+                                <span class="badge bg-danger">Cancelled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Closed</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                {% if sess.is_active and not sess.is_cancelled %}
+                                <a href="{{ url_for('staff.live_session', session_id=sess.id) }}" class="btn btn-sm btn-success">
+                                    <i class="bi bi-qr-code me-1"></i> Present QR
+                                </a>
+                                {% endif %}
+                                <a href="{{ url_for('staff.attendance_records', session_id=sess.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-table me-1"></i> Records
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            No attendance sessions found. Start a new session using the button above.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

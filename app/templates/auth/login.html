@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Smart Attendance System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center py-4">
+    <div class="col-md-7 col-lg-5 col-xl-4">
+        <div class="text-center mb-4">
+            <div class="d-inline-flex p-3 bg-navy text-primary-accent rounded-circle shadow-sm mb-3">
+                <i class="bi bi-shield-lock fs-1"></i>
+            </div>
+            <h3 class="fw-bold text-navy">College Portal Login</h3>
+            <p class="text-muted small">Select your role and authenticate to access attendance verification</p>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Role Selector Tabs -->
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Select Role</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="role" id="role_staff" value="staff" checked>
+                            <label class="btn btn-outline-primary" for="role_staff">
+                                <i class="bi bi-person-workspace me-1"></i> Faculty / Staff
+                            </label>
+
+                            <input type="radio" class="btn-check" name="role" id="role_student" value="student">
+                            <label class="btn btn-outline-primary" for="role_student">
+                                <i class="bi bi-mortarboard me-1"></i> Student
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted" for="identifier">College Email or User ID</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light text-muted"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="identifier" name="identifier" placeholder="e.g. name@college.edu or 24N266" required autofocus>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-muted" for="password">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light text-muted"><i class="bi bi-key"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" placeholder="••••••••" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary bg-navy border-0 py-2 fw-semibold">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Secure Login
+                        </button>
+                    </div>
+
+                    <div class="border-top pt-3 text-center">
+                        <p class="small text-muted mb-1">New user? Register an account:</p>
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{{ url_for('auth.register_student') }}" class="small fw-semibold text-decoration-none">Student Registration</a>
+                            <span class="text-muted small">&bull;</span>
+                            <a href="{{ url_for('auth.register_staff') }}" class="small fw-semibold text-decoration-none">Staff Registration</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4 p-3 bg-light rounded border text-center small text-muted">
+            <i class="bi bi-info-circle me-1 text-primary"></i> <b>Demo Credentials:</b><br>
+            Staff: <code>alan.turing@college.edu</code> / <code>StaffPass123!</code><br>
+            Student: <code>alice.johnson@college.edu</code> / <code>StudentPass123!</code>
+        </div>
+    </div>
+</div>
+{% endblock %}
