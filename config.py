@@ -4,7 +4,7 @@ from datetime import timedelta
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", "smart-attendance-super-secret-key-change-in-prod-2026")
+    SECRET_KEY = os.environ.get("SECRET_KEY")
     
     # Database: MySQL primary, fallback to SQLite if MySQL is unavailable or configured as such
     MYSQL_USER = os.environ.get("MYSQL_USER", "root")
